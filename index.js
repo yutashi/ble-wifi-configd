@@ -1,6 +1,6 @@
 const bleno = require('bleno');
 
-const name = 'NanoPi';
+const name = 'wifi-ble-configd';
 const serviceUuids = ['DB438497-5D68-43BF-85B7-DA61077C23AA'];
 
 const hasConfigValues = function (characteristics) {
