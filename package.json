@@ -1,0 +1,14 @@
+{
+  "name": "bluefy",
+  "version": "0.1.0",
+  "description": "Setting up your Wi-Fi from BLE",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Yuta Katayama",
+  "license": "MIT",
+  "dependencies": {
+    "bleno": "^0.4.1"
+  }
+}
