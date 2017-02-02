@@ -25,30 +25,37 @@ const writePassphrase = function (ssid, psk, stream) {
   child.stdout.pipe(stream);  
   child.on('exit', function() {
     stream.end();
-    getIface();
+    reconfigWpa();
   });
 };
 
-const getIface = function () {
-  let iface = '';
-  let child = exec('ifconfig -a | grep -o "wl[^ ]*"');
-  child.stdout.on('data', function(chunk) {
-    iface += chunk;
-  });
-
-  child.stdout.on('end', function() {
-    restartIface(iface.trim('\n'));
-  });
-};
-
-const restartIface = function (iface) {
-  console.log('Restart wireless interface...');
-  // Set timeout with milliseconds.
-  let child = exec(`ifdown ${iface} && ifup ${iface}`, { timeout: 1000 * 30 });
-  child.on('exit', function(code) {
+const reconfigWpa = function () {
+  let child = exec('wpa_cli reconfigure');
+  child.on('exit', function (code) {
     console.log('Done with status code: ', code);
-  }); 
+  });
 };
+
+// const getIface = function () {
+//   let iface = '';
+//   let child = exec('ifconfig -a | grep -o "wl[^ ]*"');
+//   child.stdout.on('data', function(chunk) {
+//     iface += chunk;
+//   });
+// 
+//   child.stdout.on('end', function() {
+//     restartIface(iface.trim('\n'));
+//   });
+// };
+// 
+// const restartIface = function (iface) {
+//   console.log('Restart wireless interface...');
+//   // Set timeout with milliseconds.
+//   let child = exec(`ifdown ${iface} && ifup ${iface}`, { timeout: 1000 * 30 });
+//   child.on('exit', function(code) {
+//     console.log('Done with status code: ', code);
+//   }); 
+// };
 
 if (psk.length < 8) {
   console.error('Passphrase must be 8~63 characters');
