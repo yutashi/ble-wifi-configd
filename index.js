@@ -1,27 +1,68 @@
+const exec = require('child_process').exec;
+const fs = require('fs');
 const bleno = require('bleno');
 
-const name = 'wifi-ble-configd';
-const serviceUuids = ['DB438497-5D68-43BF-85B7-DA61077C23AA'];
+const name = 'WifiConfigService';
+const serviceUuids = ['fff0'];
+const netConf = {
+  ssid: null,
+  psk: null
+};
 
-const hasConfigValues = function (characteristics) {
-  let count = 0;
-  characteristics.forEach(function (characteristic) {
-    if (characteristic.value) {
-      count += 1;
-    };
-  });
-
-  if (characteristics.length === count) {
-    return true;
+const connectWifi = function () {
+  if (netConf.psk.length < 8) {
+    console.error('Passphrase must be 8~63 characters');
   } else {
-    return false;
+    console.log('Starting to set up wifi...');
+    createWpaconf('/etc/wpa_supplicant/wpa_supplicant.conf');
   };
 };
 
-const clearConfigValues = function (characteristics) {
-  characteristics.forEach(function (characteristic) {
-    characteristic.value = null;
+const createWpaconf = function (wpaPath) {
+  let stream = fs.createWriteStream(wpaPath, { flags: 'w' });
+  writeBaseconf('./base.conf', stream);
+};
+
+const writeBaseconf = function (basePath, stream) {
+  fs.readFile(basePath, function(err, data) {
+    if (err) {
+      throw err;
+    };
+
+    stream.write(data);
+    writePassphrase(netConf.ssid, netConf.psk, stream);
   });
+};
+
+const writePassphrase = function (ssid, psk, stream) {
+  let child = exec(`wpa_passphrase ${ssid} ${psk}`);
+  child.stdout.pipe(stream);  
+  child.on('exit', function() {
+    stream.end();
+    reconfigWpa();
+  });
+};
+
+const reconfigWpa = function () {
+  let child = exec('wpa_cli reconfigure');
+  child.on('exit', function (code) {
+    console.log('Done with status code: ', code);
+    return code;
+  });
+};
+
+const hasConfigValues = function (netConf) {
+  if (netConf.ssid && netConf.psk) {
+    return true;
+  } else {
+    return false;
+  }
+};
+
+const clearConfigValues = function (netConf) {
+  console.log('Clean up config values.');
+  netConf.ssid = null;
+  netConf.psk = null;
 };
 
 const ssidCharacteristic = new bleno.Characteristic({
@@ -29,13 +70,13 @@ const ssidCharacteristic = new bleno.Characteristic({
   uuid: 'fff1',
   properties: ['write'],
   onWriteRequest: function(data, offset, withoutResponse, callback) {
-    console.log(pskCharacteristic.value);
-    this.value = data;
-    console.log('ssid: ' + this.value.toString('utf-8'));
+    netConf.ssid = data.toString('utf-8');
+    console.log('ssid: ' + netConf.ssid.toString('utf-8'));
 
-    if (hasConfigValues(configChars)) {
-      console.log('OK! Lets set up wifi.');
-      clearConfigValues(configChars);
+    if (hasConfigValues(netConf)) {
+      if (connectWifi() === 0) {
+        clearConfigValues(netConf);
+      };
     };
     callback(this.RESULT_SUCCESS);
   }	 
@@ -46,18 +87,17 @@ const pskCharacteristic = new bleno.Characteristic({
   uuid: 'fff2',
   properties: ['write'],
   onWriteRequest: function(data, offset, withoutResponse, callback) {
-    this.value = data;
-    console.log('psk: ' + this.value.toString('utf-8'));
+    netConf.psk = data.toString('utf-8');
+    console.log('psk: ' + netConf.psk.toString('utf-8'));
 
-    if (hasConfigValues(configChars)) {
-      console.log('OK! Lets set up wifi.');
-      clearConfigValues(configChars);
+    if (hasConfigValues(netConf)) {
+      if (connectWifi() === 0) {
+        clearConfigValues(netConf);
+      };
     };
     callback(this.RESULT_SUCCESS);
   }
 });
-
-const configChars = [ssidCharacteristic, pskCharacteristic];
 
 bleno.on('stateChange', function(state) {
   console.log('State change: ' + state);
@@ -86,7 +126,10 @@ bleno.on('advertisingStart', function(err) {
       // Define a new service.
       new bleno.PrimaryService({
         uuid: serviceUuids[0],
-        characteristics: configChars
+        characteristics: [
+	  ssidCharacteristic,
+	  pskCharacteristic
+        ]
       })
     ]);
   };
